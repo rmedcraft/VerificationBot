@@ -1,7 +1,7 @@
 import * as Discord from "discord.js";
 import * as dotenv from "dotenv";
 import { slashRegister } from "./slashRegistry";
-import { modalSubmit, sendVerifyModal } from "./verify";
+import { codeButtonSubmit, codeModalSubmit, modalSubmit, sendVerifyModal } from "./verify";
 dotenv.config();
 
 /* 
@@ -55,12 +55,18 @@ client.on("interactionCreate", async (interaction) => {
             });
         }
     } else if (interaction.isButton()) {
-        if (interaction.customId == "verifyButton") {
+        if (interaction.customId === "verifyButton") {
             sendVerifyModal(interaction);
+        }
+        if (interaction.customId === "codeButton") {
+            codeButtonSubmit(interaction);
         }
     } else if (interaction.isModalSubmit()) {
         if (interaction.customId === "verifyModal") {
             modalSubmit(interaction);
+        }
+        if (interaction.customId === "codeModal") {
+            codeModalSubmit(interaction);
         }
     }
 });

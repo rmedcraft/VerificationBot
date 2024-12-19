@@ -9,7 +9,9 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-export function sendVerifyModal(interaction) {
+let code = "";
+
+export function sendVerifyModal(interaction: Discord.ButtonInteraction) {
     const modal = new Discord.ModalBuilder()
         .setCustomId("verifyModal")
         .setTitle("Verify!");
@@ -44,7 +46,7 @@ export function sendVerifyModal(interaction) {
     interaction.showModal(modal);
 }
 
-export function modalSubmit(interaction) {
+export async function modalSubmit(interaction: Discord.ModalSubmitInteraction) {
     console.log(interaction);
 
     const firstName: string = interaction.fields.getTextInputValue("firstNameInput");
@@ -53,50 +55,69 @@ export function modalSubmit(interaction) {
 
     console.log(firstName, lastName, email);
 
+    // await interaction.deferReply({
+    //     ephemeral: true
+    // });
+
+    code = generateCode();
+
+    await sendEmail(email, code, firstName.charAt(0).toUpperCase() + firstName.substring(1), interaction.guild.name);
+
+    // create an ephemeral message with a button to open the second modal. 
+
+    const codeButton = new Discord.ButtonBuilder()
+        .setCustomId("codeButton")
+        .setLabel("Enter Code!")
+        .setStyle(Discord.ButtonStyle.Success);
+
+
+    let embed: Discord.EmbedBuilder = new Discord.EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle(`${firstName}, Your email has been sucessfully submitted!`)
+        .setDescription(`Check your ESU email for an email from **${process.env.GMAIL_EMAIL}**\n\nIf you didnt get anything, check your spam/junk folder\n\n`);
+
+    const row = new Discord.ActionRowBuilder<Discord.ButtonBuilder>()
+        .addComponents(codeButton);
+
     interaction.reply({
-        content: "Your submission has been received!",
-        ephemeral: true
+        embeds: [embed],
+        components: [row],
+        ephemeral: true,
     });
+}
 
-    // check the email is a valid esu email. If it is, then send an email to the recipient
-    // create another modal asking for the verification code sent to their email, if it matches the generated code, give them the verified role
-    const code = generateCode();
-
-    sendEmail(email, code, firstName.charAt(0).toUpperCase() + firstName.substring(1));
-
-    // create another modal to input the verification code
+export function codeButtonSubmit(interaction: Discord.ButtonInteraction) {
     const modal = new Discord.ModalBuilder()
         .setCustomId("codeModal")
-        .setTitle(`A code was sent to ${email} from ${process.env.GMAIL_EMAIL}`);
+        .setTitle(`Code Submission`);
 
     const firstNameInput = new Discord.TextInputBuilder()
-        .setCustomId('firstNameInput')
-        .setLabel("First Name: ")
-        .setPlaceholder("John")
-        .setRequired(true)
-        .setStyle(Discord.TextInputStyle.Short);
-
-    const lastNameInput = new Discord.TextInputBuilder()
-        .setCustomId('lastNameInput')
-        .setLabel("Last Name: ")
-        .setPlaceholder("Doe")
-        .setRequired(true)
-        .setStyle(Discord.TextInputStyle.Short);
-
-    const emailInput = new Discord.TextInputBuilder()
-        .setCustomId("emailInput")
-        .setLabel("ESU Email")
-        .setPlaceholder("jdoe@live.esu.edu")
+        .setCustomId('codeInput')
+        .setLabel("Verification Code: ")
+        .setPlaceholder("123456")
         .setRequired(true)
         .setStyle(Discord.TextInputStyle.Short);
 
     const firstRow = new Discord.ActionRowBuilder<Discord.TextInputBuilder>().addComponents(firstNameInput);
-    const secondRow = new Discord.ActionRowBuilder<Discord.TextInputBuilder>().addComponents(lastNameInput);
-    const thirdRow = new Discord.ActionRowBuilder<Discord.TextInputBuilder>().addComponents(emailInput);
 
-    modal.addComponents(firstRow, secondRow, thirdRow);
+    modal.addComponents(firstRow);
 
     interaction.showModal(modal);
+}
+
+export function codeModalSubmit(interaction: Discord.ModalSubmitInteraction) {
+    const codeInput: string = interaction.fields.getTextInputValue("codeInput");
+    if (codeInput === code) {
+        interaction.reply({
+            content: "You have been sucessfully verified!",
+            ephemeral: true
+        });
+    } else {
+        interaction.reply({
+            content: "Error: The code you submitted didnt match the one in your inbox",
+            ephemeral: true
+        });
+    }
 }
 
 /**
@@ -108,20 +129,25 @@ function generateCode(): string {
     return random.padStart(6, "0");
 }
 
-async function sendEmail(to: string, code: string, name: string) {
-    // TODO: figure out nodemailer
-
+/**
+ * Sends an email from process.env.GMAIL_EMAIL
+ * @param to The email the verification email gets sent to
+ * @param code The 6 digit verification code
+ * @param name The name of the person being verified
+ * @param serverName The name of the server
+ */
+async function sendEmail(to: string, code: string, name: string, serverName: string) {
     try {
         const body = `
             <p>Hello ${name},</p>
-            <p>Your Discord verification code is <strong>${code}</strong>.</p>
+            <p>Your ${serverName} verification code is <strong>${code}</strong>.</p>
             <p>This code will expire in 10 minutes. If you didn’t request this code, please ignore this email.</p>
         `;
 
         const mailOptions = {
             from: process.env.GMAIL_EMAIL,
             to,
-            subject: "Your Discord Verification Code",
+            subject: `Your ${serverName} Verification Code`,
             html: body
         };
 
@@ -129,7 +155,6 @@ async function sendEmail(to: string, code: string, name: string) {
 
         console.log("Email sent:", info.response);
     } catch (error) {
-        console.error('Error sending emial:', error);
+        console.error('Error sending email:', error);
     }
-
 }
