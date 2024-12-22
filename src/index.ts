@@ -2,7 +2,7 @@ import * as Discord from "discord.js";
 import * as dotenv from "dotenv";
 import { slashRegister } from "./slashRegistry";
 import { codeButtonSubmit, codeModalSubmit, modalSubmit, sendVerifyModal } from "./verify";
-import connectToDatabase, { findServer } from "./mongo";
+import connectToDatabase from "./mongo";
 
 dotenv.config();
 
@@ -80,7 +80,7 @@ client.on("interactionCreate", async (interaction) => {
             // each of the subcommands
             if (subcommand === "setverifiedrole") {
                 const role = interaction.options.getRole("verified");
-                
+
 
                 collection.updateOne({ serverID: interaction.guild.id }, { $set: { verifiedrole: role.id } });
                 interaction.editReply({
