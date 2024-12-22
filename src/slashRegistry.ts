@@ -34,7 +34,7 @@ export const slashRegister = async (serverID) => {
                         )
                     )
                     .addSubcommand((subcommand) => subcommand
-                        .setName("role")
+                        .setName("setverifiedrole")
                         .setDescription("Set the role people are given once verified")
                         .addRoleOption((option) =>
                             option.setName("verified")
