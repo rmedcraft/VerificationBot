@@ -79,12 +79,13 @@ client.on("interactionCreate", async (interaction) => {
             }
             // each of the subcommands
             if (subcommand === "setverifiedrole") {
-                const role = interaction.options.getRole("verified");
+                const verifyRole = interaction.options.getRole("verified");
 
+                
 
-                collection.updateOne({ serverID: interaction.guild.id }, { $set: { verifiedrole: role.id } });
+                collection.updateOne({ serverID: interaction.guild.id }, { $set: { verifiedrole: verifyRole.id } });
                 interaction.editReply({
-                    content: `Verified role successfully updated!\n\nNow, when users are verified, they will be given the **${role.name}** role`
+                    content: `Verified role successfully updated!\n\nNow, when users are verified, they will be given the **${verifyRole.name}** role`
                 });
             }
             if (subcommand === "setlanding") {

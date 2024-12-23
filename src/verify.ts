@@ -1,5 +1,6 @@
 import * as Discord from "discord.js";
 import * as nodemailer from "nodemailer";
+import connectToDatabase from "./mongo";
 
 const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -59,18 +60,26 @@ export async function modalSubmit(interaction: Discord.ModalSubmitInteraction) {
     console.log(firstName, lastName, email);
 
     // verify esu email pattern
-    const pattern = new RegExp("[a-z]+[0-9]*@live\.esu\.edu");
-    if (!pattern.test(email)) {
-        await interaction.reply({
-            content: "Please enter a valid ESU email address",
-            ephemeral: true
-        });
-        return;
-    }
+    // const pattern = new RegExp("[a-z]+[0-9]*@live\.esu\.edu");
+    // if (!pattern.test(email)) {
+    //     await interaction.reply({
+    //         content: "Please enter a valid ESU email address",
+    //         ephemeral: true
+    //     });
+    //     return;
+    // }
 
 
     // generate 6 digit verification code
     code = generateCode();
+
+    transporter.verify((error, success) => {
+        if (error) {
+            console.error("transporter connection error:", error);
+        } else {
+            console.log("Transporter is ready to send emails", success);
+        }
+    });
 
     // send the email. boolean success is whether or not the email was sent correctly
     const success = await sendEmail(email, code, firstName, interaction.guild.name);
@@ -125,18 +134,33 @@ export function codeButtonSubmit(interaction: Discord.ButtonInteraction) {
     interaction.showModal(modal);
 }
 
-export function codeModalSubmit(interaction: Discord.ModalSubmitInteraction) {
+export async function codeModalSubmit(interaction: Discord.ModalSubmitInteraction) {
     const codeInput: string = interaction.fields.getTextInputValue("codeInput");
     if (codeInput === code) {
-        let embed: Discord.EmbedBuilder = new Discord.EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle(`Success: `)
-            .setDescription(`You have been verified and will now have access to the server!`);
+        // verify guild member
+        const member = interaction.member as Discord.GuildMember;
+        const verified = await verifyUser(member);
+        if (verified) {
+            let embed: Discord.EmbedBuilder = new Discord.EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle(`Success: `)
+                .setDescription(`You have been verified and will now have access to the server!`);
 
-        interaction.reply({
-            embeds: [embed],
-            ephemeral: true
-        });
+            interaction.reply({
+                embeds: [embed],
+                ephemeral: true
+            });
+        } else {
+            let embed: Discord.EmbedBuilder = new Discord.EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle(`Error: `)
+                .setDescription(`There was an error verifying your account due to an error with role configs. Please contact the server moderation`);
+
+            interaction.reply({
+                embeds: [embed],
+                ephemeral: true
+            });
+        }
     } else {
         let embed: Discord.EmbedBuilder = new Discord.EmbedBuilder()
             .setColor(0xFF0000)
@@ -168,15 +192,16 @@ function generateCode(): string {
  */
 async function sendEmail(to: string, code: string, name: string, serverName: string): Promise<boolean> {
     try {
-        const body = `
+        const body = `<html>
             <p>Hello ${name},</p>
             <p>Your ${serverName} verification code is <strong>${code}</strong>.</p>
             <p>This code will expire in 10 minutes. If you didn’t request this code, please ignore this email.</p>
+            </html>
         `;
 
         const mailOptions = {
             from: process.env.GMAIL_EMAIL,
-            to,
+            to: to,
             subject: `Your ${serverName} Verification Code`,
             html: body
         };
@@ -191,6 +216,27 @@ async function sendEmail(to: string, code: string, name: string, serverName: str
     }
 }
 
-function verifyUser(user: Discord.User) {
+async function verifyUser(member: Discord.GuildMember): Promise<boolean> {
+    try {
+        const db = await connectToDatabase();
+        const collection = db.collection("servers");
+
+        const serverData = await collection.findOne({ serverID: member.guild.id });
+        const roleID: string = serverData.verifiedrole;
+        // gets the role object from the role ID
+        const verifiedRole = member.guild.roles.cache.find((r) => r.id === roleID);
+
+        if (!verifiedRole) {
+            console.error("Could not find verified role");
+            return false;
+        }
+
+        await member.roles.add(verifiedRole);
+
+        return true;
+    } catch (error) {
+        console.error("Error adding verified role to user:", error);
+        return false;
+    }
 
 }
