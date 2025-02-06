@@ -3,6 +3,7 @@ import * as dotenv from "dotenv";
 import { slashRegister } from "./slashRegistry";
 import { codeButtonSubmit, codeModalSubmit, modalSubmit, sendVerifyModal } from "./verify";
 import connectToDatabase from "./mongo";
+import { ServerOpeningEvent } from "mongodb";
 
 dotenv.config();
 
@@ -72,24 +73,83 @@ client.on("interactionCreate", async (interaction) => {
             const collection = db.collection("servers");
             const subcommand = interaction.options.getSubcommand();
 
-            let serverInfo = await collection.find({ serverID: interaction.guild.id }).toArray();
+            let serverInfo = await collection.findOne({ serverID: interaction.guild.id });
             // verifies the server info exists
-            if (serverInfo.length === 0) {
+            if (!serverInfo) {
                 collection.insertOne({ serverID: interaction.guild.id });
+                serverInfo = await collection.findOne({ serverID: interaction.guild.id });
             }
             // each of the subcommands
             if (subcommand === "setverifiedrole") {
                 const verifyRole = interaction.options.getRole("verified");
 
-                
+                collection.updateOne({ serverID: interaction.guild.id }, { $set: { verifiedRole: verifyRole.id } });
 
-                collection.updateOne({ serverID: interaction.guild.id }, { $set: { verifiedrole: verifyRole.id } });
+                const embed = new Discord.EmbedBuilder()
+                    .setTitle(`Success!`)
+                    .setDescription(`Verified role changed to ${verifyRole.name}`)
+                    .setColor(0xFF0000);
                 interaction.editReply({
-                    content: `Verified role successfully updated!\n\nNow, when users are verified, they will be given the **${verifyRole.name}** role`
+                    embeds: [embed]
                 });
             }
             if (subcommand === "setlanding") {
+                // you need a verified role in order to let people verify themselves
+                if (!serverInfo.verifiedRole) {
+                    let embed = new Discord.EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setTitle("Error: ")
+                        .setDescription("You need to set a verified role with `/config setverifiedrole` in order to use this command");
+                    interaction.editReply({
+                        embeds: [embed],
+                    });
+                    return;
+                }
 
+                const landing = interaction.options.getChannel("channel");
+                if (!(landing instanceof Discord.TextChannel)) return; // will likely never return, but just to be safe
+
+                // if the landing channel already exists, look at the verifymessage part of the database, delete that message.
+                // this forces only one verification message at once. 
+                if (serverInfo.landing) {
+                    const channel = await client.channels.fetch(serverInfo.landing);
+                    if (!channel.isTextBased()) return;
+                    const message = await channel.messages.fetch(serverInfo.verifyMessage);
+                    message.delete();
+                }
+
+                // create a new verification message in the new channel & update the database
+                const verify = new Discord.ButtonBuilder()
+                    .setCustomId("verifyButton")
+                    .setLabel("Verify!")
+                    .setStyle(Discord.ButtonStyle.Success);
+
+                const row = new Discord.ActionRowBuilder<Discord.ButtonBuilder>()
+                    .addComponents(verify);
+
+                let verifyEmbed: Discord.EmbedBuilder = new Discord.EmbedBuilder()
+                    .setColor(0x00FF00)
+                    .setTitle("Click here to verify your account!")
+                    .setFooter({
+                        text: "If you are not a current ESU student, but still believe you should be let in the server, please contact the server moderation"
+                    });
+
+                const verifyMessage = await landing.send({
+                    embeds: [verifyEmbed],
+                    components: [row]
+                });
+
+                // update the database
+                collection.updateOne({ serverID: interaction.guild.id }, { $set: { landing: landing.id, verifyMessage: verifyMessage.id } });
+
+                // send confirmation message
+                const embed = new Discord.EmbedBuilder()
+                    .setTitle(`Success!`)
+                    .setDescription(`Landing channel changed to ${landing.name}`)
+                    .setColor(0xFF0000);
+                interaction.editReply({
+                    embeds: [embed]
+                });
             }
         }
     } else if (interaction.isButton()) {

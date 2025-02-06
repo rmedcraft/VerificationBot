@@ -195,7 +195,7 @@ async function sendEmail(to: string, code: string, name: string, serverName: str
         const body = `<html>
             <p>Hello ${name},</p>
             <p>Your ${serverName} verification code is <strong>${code}</strong>.</p>
-            <p>This code will expire in 10 minutes. If you didn’t request this code, please ignore this email.</p>
+            <p>If you didn’t request this code, please ignore this email.</p>
             </html>
         `;
 
@@ -204,6 +204,7 @@ async function sendEmail(to: string, code: string, name: string, serverName: str
             to: to,
             subject: `Your ${serverName} Verification Code`,
             html: body
+            // text: "HELP"
         };
 
         const info = await transporter.sendMail(mailOptions);
