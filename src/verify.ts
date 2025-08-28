@@ -1,6 +1,7 @@
 import * as Discord from "discord.js";
 import * as nodemailer from "nodemailer";
 import connectToDatabase from "./mongo";
+import crypto from "node:crypto"
 
 const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -179,8 +180,9 @@ export async function codeModalSubmit(interaction: Discord.ModalSubmitInteractio
  * @returns a randomized 6 digit number as a string
  */
 function generateCode(): string {
-    let random: string = Math.floor(Math.random() * 1000000) + "";
-    return random.padStart(6, "0");
+    // let random: string = Math.floor(Math.random() * 1000000) + "";
+    // return random.padStart(6, "0");
+    return crypto.randomInt(999999).toString().padStart(6, "0")
 }
 
 /**
